@@ -1,0 +1,35 @@
+{
+  "name": "integration-huron-file-drop",
+  "description": "S3 file-drop infrastructure, via CDK, with event-driven processing, validation, error handling, and Lambda routing for async data file delivery",
+  "version": "0.1.0",
+  "bin": {
+    "integration-huron-file-drop": "bin/App.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk",
+    "synth": "cdk synth 2>&1 | tee cdk.out/synth.output.yaml",
+    "deploy": "cdk deploy --all --no-rollback --require-approval never",
+    "redeploy": "cdk destroy --all -f && npm run deploy",
+    "teardown": "cdk destroy -f"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.10.1",
+    "aws-cdk": "^2.1000.0",
+    "esbuild": "^0.27.2",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.235.1",
+    "constructs": "^10.0.0",
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-lambda": "^3.400.0"
+  }
+}
