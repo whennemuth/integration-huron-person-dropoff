@@ -47,9 +47,9 @@ async function processRecord(record: S3EventRecord): Promise<void> {
   console.log(`Matched subfolder: ${subfolderConfig.path}`);
 
   // Skip if file has already been processed (matches date-based naming pattern)
-  // Pattern: {subfolder}/{prefix}-{ISO_TIMESTAMP}.json (e.g., full-2026-02-20T16:57:35.356Z.json)
+  // Pattern: {subfolder}/arrived-{ISO_TIMESTAMP}.json (e.g., arrived-2026-02-20T16:57:35.356Z.json)
   const filename = key.split('/').pop() || '';
-  const dateBasedPattern = /^(full|delta|invalid-json)-\d{4}-\d{2}-\d{2}T[\d:.]+Z\.json$/;
+  const dateBasedPattern = /^arrived-\d{4}-\d{2}-\d{2}T[\d:.]+Z\.json$/;
   if (dateBasedPattern.test(filename)) {
     console.log(`File ${filename} has already been processed (matches date-based pattern). Skipping to avoid recursive loop.`);
     return;
@@ -110,13 +110,11 @@ async function renameToJsonExtension(bucket: string, key: string): Promise<strin
 
 /**
  * Generate date-based filename for a specific subfolder
- * Extracts prefix from subfolder path (e.g., "data-full" -> "full-", "data-delta" -> "delta-")
+ * Uses "arrived-" prefix to avoid dependency on subfolder naming conventions
  */
 function generateDateBasedFileName(subfolderPath: string): string {
   const timestamp = new Date().toISOString();
-  // Extract last part after hyphen as prefix (e.g., "data-full" -> "full")
-  const prefix = subfolderPath.split('-').pop() || 'data';
-  return `${subfolderPath}/${prefix}-${timestamp}.json`;
+  return `${subfolderPath}/arrived-${timestamp}.json`;
 }
 
 /**
