@@ -14,12 +14,12 @@ interface EventPayload {
 }
 
 /**
- * Test target Lambda handler
+ * Test subscriber Lambda handler
  * Used for testing the event processor Lambda
  * Logs the event payload and attempts to read the S3 object
  */
 export async function handler(event: EventPayload, context: LambdaContext): Promise<void> {
-  console.log('Test Target Lambda - Received event:', JSON.stringify(event, null, 2));
+  console.log('Test Subscriber Lambda - Received event:', JSON.stringify(event, null, 2));
 
   const { s3Path, bucket, key } = event;
 

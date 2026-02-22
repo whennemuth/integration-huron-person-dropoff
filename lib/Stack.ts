@@ -4,7 +4,7 @@ import { IContext } from '../context/IContext';
 import { FileDropBucket } from './FileDropBucket';
 import { EventProcessorLambda } from './EventProcessorLambda';
 import { BucketAccessKeys } from './AccessKeys';
-import { TestTargetLambda, isTestFunctionArn } from './TestTargetLambda';
+import { TestSubscriberLambda, isTestFunctionArn } from './TestSubscriberLambda';
 
 export type FileDropStackProps = {
   context: IContext;
@@ -16,16 +16,16 @@ export type FileDropStackProps = {
  * 
  * Creates:
  * - S3 bucket for receiving async data files
- * - Lambda function to process S3 events and invoke target lambdas
+ * - Lambda function to process S3 events and invoke subscriber lambdas
  * - IAM access keys for external systems (stored in Secrets Manager)
  * - Bucket policies for Lambda read access
- * - Optional test target Lambda for testing (when CREATE_TEST_TARGET_LAMBDA is true)
+ * - Optional test subscriber Lambda for testing (when LAMBDA.subscriberForTesting is configured)
  */
 export class FileDropStack extends cdk.Stack {
   public readonly bucket: FileDropBucket;
   public readonly eventProcessor: EventProcessorLambda;
   public readonly accessKeys: BucketAccessKeys;
-  public readonly testTargetLambda?: TestTargetLambda;
+  public readonly testSubscriberLambda?: TestSubscriberLambda;
 
   constructor(scope: Construct, id: string, props: FileDropStackProps) {
     const { context, stackProps } = props;
@@ -40,13 +40,13 @@ export class FileDropStack extends cdk.Stack {
       bucket: this.bucket.bucket
     });
 
-    // Grant read access to all target Lambda(s) referenced in subdirectories
-    // Filter out test Lambda if present - it gets permissions via bucket.grantRead() in TestTargetLambda construct
+    // Grant read access to all subscriber Lambda(s) referenced in subdirectories
+    // Filter out test Lambda if present - it gets permissions via bucket.grantRead() in TestSubscriberLambda construct
     const externalSubdirectories = context.BUCKET.subdirectories.filter(
-      sub => !isTestFunctionArn(sub.targetLambdaArn, context)
+      sub => !isTestFunctionArn(sub.subscriberLambdaArn, context)
     );
-    const targetLambdaRoleArns = externalSubdirectories.map(sub => sub.targetLambdaExecutionRoleArn);
-    const uniqueLambdaRoleArns = [...new Set(targetLambdaRoleArns)]; // Remove duplicates
+    const subscriberLambdaRoleArns = externalSubdirectories.map(sub => sub.subscriberLambdaExecutionRoleArn);
+    const uniqueLambdaRoleArns = [...new Set(subscriberLambdaRoleArns)]; // Remove duplicates
     uniqueLambdaRoleArns.forEach((roleArn, index) => {
       this.bucket.grantReadToLambda(roleArn, index + 1);
     });
@@ -57,9 +57,9 @@ export class FileDropStack extends cdk.Stack {
       bucket: this.bucket.bucket
     });
 
-    // Optionally create test target Lambda for testing
-    if (context.CREATE_TEST_TARGET_LAMBDA) {
-      this.testTargetLambda = new TestTargetLambda(this, 'test-target-lambda', {
+    // Optionally create test subscriber Lambda for testing
+    if (context.LAMBDA.subscriberForTesting) {
+      this.testSubscriberLambda = new TestSubscriberLambda(this, 'test-subscriber-lambda', {
         context,
         bucket: this.bucket.bucket
       });
@@ -90,17 +90,17 @@ export class FileDropStack extends cdk.Stack {
       exportName: `${context.STACK_ID}-${context.TAGS.Landscape}-event-processor-arn`
     });
 
-    if (this.testTargetLambda) {
-      new cdk.CfnOutput(this, 'TestTargetLambdaArn', {
-        value: this.testTargetLambda.lambda.functionArn,
-        description: 'Test target Lambda ARN (for testing event processor)',
-        exportName: `${context.STACK_ID}-${context.TAGS.Landscape}-test-target-arn`
+    if (this.testSubscriberLambda) {
+      new cdk.CfnOutput(this, 'TestSubscriberLambdaArn', {
+        value: this.testSubscriberLambda.lambda.functionArn,
+        description: 'Test subscriber Lambda ARN (for testing event processor)',
+        exportName: `${context.STACK_ID}-${context.TAGS.Landscape}-test-subscriber-arn`
       });
 
-      new cdk.CfnOutput(this, 'TestTargetLambdaRoleArn', {
-        value: this.testTargetLambda.lambda.role!.roleArn,
-        description: 'Test target Lambda execution role ARN (use as targetLambdaExecutionRoleArn)',
-        exportName: `${context.STACK_ID}-${context.TAGS.Landscape}-test-target-role-arn`
+      new cdk.CfnOutput(this, 'TestSubscriberLambdaRoleArn', {
+        value: this.testSubscriberLambda.lambda.role!.roleArn,
+        description: 'Test subscriber Lambda execution role ARN (use as subscriberLambdaExecutionRoleArn)',
+        exportName: `${context.STACK_ID}-${context.TAGS.Landscape}-test-subscriber-role-arn`
       });
     }
   }

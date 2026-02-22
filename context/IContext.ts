@@ -46,21 +46,28 @@ export interface IContext {
    */
   LAMBDA: {
     /**
-     * Timeout in seconds for Lambda functions
+     * Configuration for the event processor Lambda function that handles S3 events and invokes subscriber Lambdas
      */
-    timeoutSeconds?: number;
+    eventProcessor: LambdaConfig;
 
     /**
-     * Memory allocation in MB for Lambda functions
+     * Optional configuration for a test subscriber Lambda function that can be created for testing purposes.
+     * If not provided, no test subscriber Lambda will be created,
      */
-    memorySizeMb?: number;
+    subscriberForTesting?: LambdaConfig;
   };
+}
+
+export type LambdaConfig = {
+  /**
+   * Timeout in seconds for Lambda functions
+   */
+  timeoutSeconds?: number;
 
   /**
-   * When true, creates a test target Lambda function for testing the event processor
-   * This Lambda logs the event payload and attempts to read the S3 object
+   * Memory allocation in MB for Lambda functions
    */
-  CREATE_TEST_TARGET_LAMBDA?: boolean;
+  memorySizeMb?: number;
 }
 
 export type BucketSubdirectory = {
@@ -78,14 +85,14 @@ export type BucketSubdirectory = {
 
   /**
    * Lambda function ARN to invoke after successful processing
-   * Used by event processor to trigger the target Lambda
+   * Used by event processor to trigger the subscriber Lambda
    */
-  targetLambdaArn: string;
+  subscriberLambdaArn: string;
 
   /**
-   * Execution role ARN of the target Lambda function
+   * Execution role ARN of the subscriber Lambda function
    * Used to grant S3 bucket read permissions via bucket policy
    * Example: "arn:aws:iam::123456789012:role/data-processor-role"
    */
-  targetLambdaExecutionRoleArn: string;
+  subscriberLambdaExecutionRoleArn: string;
 }

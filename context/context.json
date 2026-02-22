@@ -15,20 +15,25 @@
       {
         "path": "person-full",
         "objectLifetimeDays": 7,
-        "targetLambdaArn": "arn:aws:lambda:us-east-2:770203350335:function:huron-person-file-drop-test-target-dev",
-        "targetLambdaExecutionRoleArn": "<REPLACE_WITH_LAMBDA_EXECUTION_ROLE_ARN>"
+        "subscriberLambdaArn": "arn:aws:lambda:us-east-2:770203350335:function:huron-person-file-drop-test-subscriber-dev",
+        "subscriberLambdaExecutionRoleArn": "<REPLACE_WITH_LAMBDA_EXECUTION_ROLE_ARN>"
       },
       {
         "path": "person-delta",
         "objectLifetimeDays": 3,
-        "targetLambdaArn": "arn:aws:lambda:us-east-2:770203350335:function:huron-person-file-drop-test-target-dev",
-        "targetLambdaExecutionRoleArn": "<REPLACE_WITH_LAMBDA_EXECUTION_ROLE_ARN>"
+        "subscriberLambdaArn": "arn:aws:lambda:us-east-2:770203350335:function:huron-person-file-drop-test-subscriber-dev",
+        "subscriberLambdaExecutionRoleArn": "<REPLACE_WITH_LAMBDA_EXECUTION_ROLE_ARN>"
       }
     ]
   },
   "LAMBDA": {
-    "timeoutSeconds": 300,
-    "memorySizeMb": 512
-  },
-  "CREATE_TEST_TARGET_LAMBDA": true
+    "eventProcessor": {
+      "timeoutSeconds": 300,
+      "memorySizeMb": 512
+    },
+    "subscriberForTesting": {
+      "timeoutSeconds": 30,
+      "memorySizeMb": 2048
+    }
+  }
 }

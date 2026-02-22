@@ -2,7 +2,7 @@
 
 CDK infrastructure for an S3 bucket and lambda trigger that together serve a "drop off" point for JSON payloads that comprise a population of data as part of the Huron integration suite. 
 
-This allows external processes *(like the Boston University CDM SnapLogic endpoint)* to upload data files (ie: person population data files) to S3, which then triggers a Lambda function to respond to the new arrivals by invoking other target Lambdas with the path of the new file so it can be pulled out of the bucket for batch processing.
+This allows external processes *(like the Boston University CDM SnapLogic endpoint)* to upload data files (ie: person population data files) to S3, which then triggers a Lambda function to respond to the new arrivals by invoking other subscriber Lambdas with the path of the new file so it can be pulled out of the bucket for batch processing.
 
 ## Problem
 If an external system engages in a long running process in order to respond to requests for data, problems can arise for any requesting process running in a serverless environment with a limited execution time. For example, if the Boston University CDM SnapLogic endpoint is asked to provide a large population of data, it may not be able to respond within the execution time limits of a lambda function that is invoking it.
@@ -21,7 +21,7 @@ graph LR
 
 ## Solution
 To solve this problem, we essentially divide what used to be a single process into two.
-The requesting lambda function (Lambda #1) will still invoke the external system, but instead of waiting for the response, it will expect a 202 Accepted status and end execution there. The external system will then continue working to gather the data and, once ready, will upload the data to the S3 bucket created by this CDK app. The arrival of the new file to S3 comprises an event that will trigger a second lambda function (Lambda #2) that will be responsible for responding to the new file by invoking other target Lambdas with its path and key in S3 so they can pull the file out of the bucket and process the data as needed. These other target lambdas could be the very same ones that initially invoked the external system to request the data, but will treat the presense of the s3 file data as their queue to carry out the second stage.
+The requesting lambda function (Lambda #1) will still invoke the external system, but instead of waiting for the response, it will expect a 202 Accepted status and end execution there. The external system will then continue working to gather the data and, once ready, will upload the data to the S3 bucket created by this CDK app. The arrival of the new file to S3 comprises an event that will trigger a second lambda function (Lambda #2) that will be responsible for responding to the new file by invoking other subscriber Lambdas with its path and key in S3 so they can pull the file out of the bucket and process the data as needed. These other subscriber lambdas could be the very same ones that initially invoked the external system to request the data, but will treat the presense of the s3 file data as their queue to carry out the second stage.
 
 ```mermaid
 graph LR
@@ -36,7 +36,7 @@ graph LR
         B2P -->|5. Upload JSON File| C[S3 Bucket<br/>data-full/<br/>data-delta/]
         C -->|6. S3 Event Trigger| D[Event Processor Lambda<br/>Lambda #2]
     D -->|7. Process & Rename| DP[Processing Complete<br/>• File renamed<br/>• Lifecycle rule applies]
-        DP -->|8. Invoke with S3 Path| E[Target Lambda<br/>data-full or data-delta]
+        DP -->|8. Invoke with S3 Path| E[Subscriber Lambda<br/>data-full or data-delta]
         E <-->|9. Read from S3<br/>Process Data| C
     end
     
@@ -64,17 +64,20 @@ Edit `context/context.json` to configure:
 - **BUCKET.subdirectories**: Array of subfolder configurations, each with:
   - **path**: Subdirectory name (e.g., "data-full", "data-delta")
   - **objectLifetimeDays**: Days before objects expire (subfolder-specific)
-  - **targetLambdaArn**: Lambda ARN to invoke for this subfolder's files
-  - **targetLambdaExecutionRoleArn**: Execution role ARN of the target Lambda (for S3 bucket permissions)
+  - **subscriberLambdaArn**: Lambda ARN to invoke for this subfolder's files
+  - **subscriberLambdaExecutionRoleArn**: Execution role ARN of the subscriber Lambda (for S3 bucket permissions)
   
   **Note**: Both Lambda ARN and execution role ARN are required:
-  - `targetLambdaArn` is used by the event processor to invoke the Lambda function
-  - `targetLambdaExecutionRoleArn` is used in the S3 bucket policy to grant read permissions (bucket policies require IAM role ARNs as principals, not Lambda function ARNs)
-- **LAMBDA**: Timeout and memory settings
-  - **timeoutSeconds** (optional, default: 300): Lambda execution timeout
-  - **memorySizeMb** (optional, default: 512): Lambda memory allocation
+  - `subscriberLambdaArn` is used by the event processor to invoke the Lambda function
+  - `subscriberLambdaExecutionRoleArn` is used in the S3 bucket policy to grant read permissions (bucket policies require IAM role ARNs as principals, not Lambda function ARNs)
+- **LAMBDA**: Lambda function configuration
+  - **eventProcessor**: Configuration for the event processor Lambda
+    - **timeoutSeconds** (optional, default: 300): Lambda execution timeout
+    - **memorySizeMb** (optional, default: 512): Lambda memory allocation
+  - **subscriberForTesting** (optional): When provided, creates a test Lambda function that logs event payloads and reads S3 objects. Useful for testing the event processor without deploying actual subscriber Lambdas.
+    - **timeoutSeconds** (optional, default: 30): Lambda execution timeout
+    - **memorySizeMb** (optional, default: 2048): Lambda memory allocation
 - **TAGS**: Resource tags for organization
-- **CREATE_TEST_TARGET_LAMBDA** (optional): When set to `true`, creates a test Lambda function that logs event payloads and reads S3 objects to count items in rawData. Useful for testing the event processor without deploying actual target Lambdas.
 
 ### Example Configuration
 
@@ -86,45 +89,50 @@ Edit `context/context.json` to configure:
       {
         "path": "data-full",
         "objectLifetimeDays": 7,
-        "targetLambdaArn": "arn:aws:lambda:us-east-1:123456789012:function:data-processor-dev",
-        "targetLambdaExecutionRoleArn": "arn:aws:iam::123456789012:role:data-processor-role"
+        "subscriberLambdaArn": "arn:aws:lambda:us-east-1:123456789012:function:data-processor-dev",
+        "subscriberLambdaExecutionRoleArn": "arn:aws:iam::123456789012:role:data-processor-role"
       },
       {
         "path": "data-delta",
         "objectLifetimeDays": 3,
-        "targetLambdaArn": "arn:aws:lambda:us-east-1:123456789012:function:data-delta-processor-dev",
-        "targetLambdaExecutionRoleArn": "arn:aws:iam::123456789012:role:data-delta-processor-role"
+        "subscriberLambdaArn": "arn:aws:lambda:us-east-1:123456789012:function:data-delta-processor-dev",
+        "subscriberLambdaExecutionRoleArn": "arn:aws:iam::123456789012:role:data-delta-processor-role"
       }
     ]
   },
   "LAMBDA": {
-    "timeoutSeconds": 300,
-    "memorySizeMb": 512
-  },
-  "CREATE_TEST_TARGET_LAMBDA": true
+    "eventProcessor": {
+      "timeoutSeconds": 300,
+      "memorySizeMb": 512
+    },
+    "subscriberForTesting": {
+      "timeoutSeconds": 30,
+      "memorySizeMb": 2048
+    }
+  }
 }
 ```
 
-This configuration allows different subfolders to have different retention policies and target different Lambda functions for processing.
+This configuration allows different subfolders to have different retention policies and subscriber different Lambda functions for processing.
 
-### Test Target Lambda
+### Test Subscriber Lambda
 
-When `CREATE_TEST_TARGET_LAMBDA` is set to `true`, a test Lambda function is created that:
+When `LAMBDA.subscriberForTesting` is configured, a test Lambda function is created that:
 1. Logs the complete event payload received from the event processor
 2. Attempts to load the S3 object using the provided bucket and key
 3. Parses the JSON and counts items in `rawData` (or `data` array)
 4. Logs the item count
 
 This is useful for:
-- Testing the event processor without needing actual target Lambdas deployed
+- Testing the event processor without needing actual subscriber Lambdas deployed
 - Verifying that S3 objects are correctly formatted and accessible
 - Debugging event payload structure
 
-After deployment, you can use the test Lambda ARN (from stack outputs) in place of real target Lambda ARNs in your `BUCKET.subdirectories` configuration. The test Lambda's execution role ARN is also provided as a stack output (`TestTargetLambdaRoleArn`).
+After deployment, you can use the test Lambda ARN (from stack outputs) in place of real subscriber Lambda ARNs in your `BUCKET.subdirectories` configuration. The test Lambda's execution role ARN is also provided as a stack output (`TestSubscriberLambdaRoleArn`).
 
 ### Finding Lambda Execution Role ARNs
 
-**For the test target Lambda**: The execution role ARN is provided as a stack output (`TestTargetLambdaRoleArn`) after deployment.
+**For the test subscriber Lambda**: The execution role ARN is provided as a stack output (`TestSubscriberLambdaRoleArn`) after deployment.
 
 **For other Lambda functions**: Find the execution role ARN using AWS CLI:
 
@@ -139,14 +147,14 @@ aws lambda get-function --function-name data-processor-dev --query 'Configuratio
 # Returns: arn:aws:iam::123456789012:role/data-processor-role
 ```
 
-Use these role ARNs in the `targetLambdaExecutionRoleArn` field of your subdirectory configurations.
+Use these role ARNs in the `subscriberLambdaExecutionRoleArn` field of your subdirectory configurations.
 
 ## Prerequisites
 
 - Node.js 18+ and npm
 - AWS CDK CLI: `npm install -g aws-cdk`
 - AWS credentials configured
-- Target Lambda function(s) deployed
+- Subscriber Lambda function(s) deployed
 
 ## Setup
 
@@ -237,8 +245,8 @@ This allows external systems to continue using the same credentials across stack
 - `BucketArn`: S3 bucket ARN
 - `AccessKeysSecretArn`: Secrets Manager ARN with access keys
 - `EventProcessorLambdaArn`: Event processor Lambda ARN
-- `TestTargetLambdaArn`: Test target Lambda ARN (when `CREATE_TEST_TARGET_LAMBDA` is true)
-- `TestTargetLambdaRoleArn`: Test target Lambda execution role ARN (when `CREATE_TEST_TARGET_LAMBDA` is true) - use this value for `targetLambdaExecutionRoleArn` when testing
+- `TestSubscriberLambdaArn`: Test subscriber Lambda ARN (when `LAMBDA.subscriberForTesting` is configured)
+- `TestSubscriberLambdaRoleArn`: Test subscriber Lambda execution role ARN (when `LAMBDA.subscriberForTesting` is configured) - use this value for `subscriberLambdaExecutionRoleArn` when testing
 
 ## Object Lifecycle
 
@@ -289,6 +297,6 @@ npm run redeploy
 - The bucket has `autoDeleteObjects: true` for easy cleanup during development
 - IAM User, AccessKey, and Secrets Manager secret all have `RETAIN` policy - they persist after stack deletion
 - Access keys can be reused across stack recreations by specifying `BUCKET.access` in context
-- Target Lambda functions must exist before deployment
-- Event processor uses async invocation for target Lambdas (fire-and-forget)
+- Subscriber Lambda functions must exist before deployment
+- Event processor uses async invocation for subscriber Lambdas (fire-and-forget)
 - Lambda CloudWatch logs retained for 1 month, then automatically deleted

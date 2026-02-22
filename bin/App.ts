@@ -25,7 +25,7 @@ new FileDropStack(app, 'file-drop-stack', {
   context,
   stackProps: {
     stackName,
-    description: 'S3 bucket and event processor for async file drop and processing by target Lambda functions',
+    description: 'S3 bucket and event processor for async file drop and processing by subscriber Lambda functions',
     env: { account, region },
     tags: { Landscape, CostCenter, Ticket, Service, Function }
   }

@@ -121,7 +121,7 @@ console.log('Data uploaded to S3 file-drop bucket');
 3. **Lambda validates** JSON structure
 4. **Lambda renames** to `person-full/full-2026-02-19T15:30:45.123Z.json`
 5. **Lambda sets expiration** (7 days default)
-6. **Lambda invokes** target Lambda(s) with payload:
+6. **Lambda invokes** subscriber Lambda(s) with payload:
    ```json
    {
      "s3Path": "s3://huron-file-drop-dev/person-full/full-2026-02-19T15:30:45.123Z.json",
@@ -133,11 +133,11 @@ console.log('Data uploaded to S3 file-drop bucket');
      }
    }
    ```
-7. **Target Lambda** retrieves object from S3 and processes person data
+7. **Subscriber Lambda** retrieves object from S3 and processes person data
 
-## Target Lambda Implementation
+## Subscriber Lambda Implementation
 
-The target Lambda (Lambda #2) should expect the S3 path parameter:
+The subscriber Lambda (Lambda #2) should expect the S3 path parameter:
 
 ```javascript
 export async function handler(event) {

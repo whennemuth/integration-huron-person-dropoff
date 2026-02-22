@@ -46,31 +46,19 @@ async function processRecord(record: S3EventRecord): Promise<void> {
 
   console.log(`Matched subfolder: ${subfolderConfig.path}`);
 
-  // Skip if file has already been processed (matches date-based naming pattern)
-  // Pattern: {subfolder}/arrived-{ISO_TIMESTAMP}.json (e.g., arrived-2026-02-20T16:57:35.356Z.json)
+  // Skip if file has already been processed (matches timestamp prefix pattern)
+  // Pattern: {ISO_TIMESTAMP}-{original_filename} (e.g., 2026-02-20T16:57:35.356Z-data.json)
   const filename = key.split('/').pop() || '';
-  const dateBasedPattern = /^arrived-\d{4}-\d{2}-\d{2}T[\d:.]+Z\.json$/;
+  const dateBasedPattern = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z-/;
   if (dateBasedPattern.test(filename)) {
-    console.log(`File ${filename} has already been processed (matches date-based pattern). Skipping to avoid recursive loop.`);
+    console.log(`File ${filename} has already been processed (matches timestamp prefix pattern). Skipping to avoid recursive loop.`);
     return;
   }
 
-  // Rename file if it doesn't have .json extension
-  let finalKey = key;
-  if (!key.endsWith('.json')) {
-    console.log(`File does not have .json extension. Renaming...`);
-    const renamedKey = await renameToJsonExtension(bucket, key);
-    if (!renamedKey) {
-      console.error(`Failed to rename object: ${key}`);
-      return;
-    }
-    finalKey = renamedKey;
-  }
-
-  // Rename with date-based convention
-  const newKey = generateDateBasedFileName(subfolderConfig.path);
-  console.log(`Renaming ${finalKey} to ${newKey}`);
-  const renamed = await renameObject(bucket, finalKey, newKey);
+  // Rename with timestamp prefix to preserve original filename completely
+  const newKey = generateDateBasedFileName(subfolderConfig.path, filename);
+  console.log(`Renaming ${key} to ${newKey}`);
+  const renamed = await renameObject(bucket, key, newKey);
   if (!renamed) {
     console.error(`Failed to rename object to date-based filename`);
     return;
@@ -78,8 +66,8 @@ async function processRecord(record: S3EventRecord): Promise<void> {
 
   // Note: Object expiration is handled by S3 bucket lifecycle rules (configured per subdirectory)
 
-  // Invoke target Lambda function for this subfolder
-  await invokeTargetLambda(bucket, newKey, subfolderConfig.targetLambdaArn);
+  // Invoke subscriber Lambda function for this subfolder
+  await invokeSubscriberLambda(bucket, newKey, subfolderConfig.subscriberLambdaArn);
 
   console.log(`Successfully processed: ${newKey}`);
 }
@@ -100,21 +88,13 @@ function findSubfolderConfig(key: string): BucketSubdirectory | null {
 }
 
 /**
- * Rename object to have .json extension
+ * Generate timestamp-prefixed filename for a specific subfolder
+ * Preserves the original filename completely by prefixing with ISO timestamp
+ * Example: "data.json" becomes "2026-02-20T16:57:35.356Z-data.json"
  */
-async function renameToJsonExtension(bucket: string, key: string): Promise<string | null> {
-  const newKey = `${key}.json`;
-  const success = await renameObject(bucket, key, newKey);
-  return success ? newKey : null;
-}
-
-/**
- * Generate date-based filename for a specific subfolder
- * Uses "arrived-" prefix to avoid dependency on subfolder naming conventions
- */
-function generateDateBasedFileName(subfolderPath: string): string {
+function generateDateBasedFileName(subfolderPath: string, originalFilename: string): string {
   const timestamp = new Date().toISOString();
-  return `${subfolderPath}/arrived-${timestamp}.json`;
+  return `${subfolderPath}/${timestamp}-${originalFilename}`;
 }
 
 /**
@@ -144,13 +124,13 @@ async function renameObject(bucket: string, oldKey: string, newKey: string): Pro
 }
 
 /**
- * Invoke the target Lambda function for this subfolder with S3 path
+ * Invoke the subscriber Lambda function for this subfolder with S3 path
  */
-async function invokeTargetLambda(bucket: string, key: string, targetArn: string): Promise<void> {
+async function invokeSubscriberLambda(bucket: string, key: string, subscriberArn: string): Promise<void> {
   const s3Path = `s3://${bucket}/${key}`;
 
   try {
-    console.log(`Invoking target Lambda: ${targetArn}`);
+    console.log(`Invoking subscriber Lambda: ${subscriberArn}`);
     
     const payload = {
       s3Path,
@@ -163,15 +143,15 @@ async function invokeTargetLambda(bucket: string, key: string, targetArn: string
     };
 
     const command = new InvokeCommand({
-      FunctionName: targetArn,
+      FunctionName: subscriberArn,
       InvocationType: 'Event', // Async invocation
       Payload: Buffer.from(JSON.stringify(payload))
     });
 
     await lambdaClient.send(command);
-    console.log(`Successfully invoked target Lambda: ${targetArn}`);
+    console.log(`Successfully invoked subscriber Lambda: ${subscriberArn}`);
   } catch (error) {
-    console.error(`Error invoking target Lambda (${targetArn}):`, error);
+    console.error(`Error invoking subscriber Lambda (${subscriberArn}):`, error);
     throw error;
   }
 }

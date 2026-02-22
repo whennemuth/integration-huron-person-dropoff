@@ -21,7 +21,7 @@ export type EventProcessorLambdaProps = {
  * - Rename files with date-based convention
  * - Set object expiration
  * - Move invalid files to error subdirectory
- * - Invoke target Lambda function(s) for processing
+ * - Invoke subscriber Lambda function(s) for processing
  */
 export class EventProcessorLambda extends Construct {
   public readonly lambda: NodejsFunction;
@@ -32,16 +32,16 @@ export class EventProcessorLambda extends Construct {
     const { context, bucket } = props;
     const { STACK_ID, TAGS: { Landscape }, LAMBDA, BUCKET } = context;
 
-    // Collect all target Lambda ARNs for IAM permissions
-    const targetLambdaArns = BUCKET.subdirectories.map(sub => sub.targetLambdaArn);
+    // Collect all subscriber Lambda ARNs for IAM permissions
+    const subscriberLambdaArns = BUCKET.subdirectories.map(sub => sub.subscriberLambdaArn);
 
-    // Create runtime config for Lambda (exclude CDK-only fields like targetLambdaExecutionRoleArn)
+    // Create runtime config for Lambda (exclude CDK-only fields like subscriberLambdaExecutionRoleArn)
     const runtimeBucketConfig = {
       name: BUCKET.name,
       subdirectories: BUCKET.subdirectories.map(sub => ({
         path: sub.path,
         objectLifetimeDays: sub.objectLifetimeDays,
-        targetLambdaArn: sub.targetLambdaArn
+        subscriberLambdaArn: sub.subscriberLambdaArn
       }))
     };
 
@@ -51,8 +51,8 @@ export class EventProcessorLambda extends Construct {
       runtime: Runtime.NODEJS_20_X,
       handler: 'handler',
       entry: 'src/event-processor/index.ts',
-      timeout: Duration.seconds(LAMBDA?.timeoutSeconds || 300),
-      memorySize: LAMBDA?.memorySizeMb || 512,
+      timeout: Duration.seconds(LAMBDA.eventProcessor?.timeoutSeconds || 300),
+      memorySize: LAMBDA.eventProcessor?.memorySizeMb || 512,
       logRetention: RetentionDays.ONE_MONTH,
       environment: {
         BUCKET_CONFIG: JSON.stringify(runtimeBucketConfig)
@@ -69,8 +69,8 @@ export class EventProcessorLambda extends Construct {
     bucket.grantDelete(this.lambda);
     bucket.grantPutAcl(this.lambda);
 
-    // Grant Lambda permission to invoke target Lambda(s)
-    targetLambdaArns.forEach(arn => {
+    // Grant Lambda permission to invoke subscriber Lambda(s)
+    subscriberLambdaArns.forEach(arn => {
       this.lambda.addToRolePolicy(
         new PolicyStatement({
           effect: Effect.ALLOW,

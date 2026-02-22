@@ -19,5 +19,5 @@ describe('Event Processor Lambda', () => {
   // - Invalid JSON handling
   // - File renaming logic
   // - Error subdirectory moves
-  // - Target Lambda invocation
+  // - Subscriber Lambda invocation
 });
