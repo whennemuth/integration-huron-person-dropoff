@@ -13,6 +13,19 @@ export async function handler(event: S3Event, context: LambdaContext): Promise<v
 
   for (const record of event.Records) {
     try {
+      // Validate that the bucket name from the S3 event matches the configuration
+      const eventBucketName = record.s3.bucket.name;
+      const configBucketName = BUCKET_CONFIG.name;
+      
+      if (eventBucketName !== configBucketName) {
+        throw new Error(
+          `Bucket name mismatch: S3 event reports bucket "${eventBucketName}" ` +
+          `but Lambda configuration expects "${configBucketName}". ` +
+          `This indicates a deployment issue where the Lambda's BUCKET_CONFIG environment variable ` +
+          `does not match the actual S3 bucket triggering the event.`
+        );
+      }
+      
       const bucket = new Bucket(BUCKET_CONFIG);
       const processor = new S3EventProcessor(record, bucket);
       const result = await processor.process();

@@ -7,6 +7,7 @@ import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Bucket, EventType } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { IContext } from '../context/IContext';
+import { getBucketName } from './FileDropBucket';
 
 export type EventProcessorLambdaProps = {
   context: IContext;
@@ -37,7 +38,7 @@ export class EventProcessorLambda extends Construct {
 
     // Create runtime config for Lambda (exclude CDK-only fields like subscriberLambdaExecutionRoleArn)
     const runtimeBucketConfig = {
-      name: BUCKET.name,
+      name: getBucketName(context),
       subdirectories: BUCKET.subdirectories.map(sub => ({
         path: sub.path,
         objectLifetimeDays: sub.objectLifetimeDays,
